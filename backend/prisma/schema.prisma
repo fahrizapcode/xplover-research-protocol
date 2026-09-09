@@ -1,0 +1,370 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USERS & ROLES
+// ============================================================
+
+enum RoleName {
+  RESEARCHER
+  PEER_REVIEWER
+  CONTENT_CREATOR
+  VISUAL_DESIGNER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  avatar       String?
+  bio          String?
+  walletAddress String? @unique
+  xcrBalance   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  roles                UserRole[]
+  research             Research[]
+  researchRatings      ResearchRating[]
+  contentCreated       Content[]           @relation("ContentCreator")
+  contentReviews       ContentReview[]     @relation("ReviewerUser")
+  visualDesigns        VisualDesign[]
+  xcrTransactions      XcrTransaction[]
+  activityLogs         ActivityLog[]
+  blockchainAttest     BlockchainAttestation[] @relation("ContributorAttestations")
+  contentRevisions     ContentRevision[]
+
+  @@map("users")
+}
+
+model Role {
+  id        String     @id @default(uuid())
+  name      RoleName   @unique
+  createdAt DateTime   @default(now())
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  assignedBy String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// ============================================================
+// RESEARCH
+// ============================================================
+
+enum TechnologyCategory {
+  ARTIFICIAL_INTELLIGENCE
+  WEB3
+  CYBERSECURITY
+  QUANTUM_COMPUTING
+  ROBOTICS
+  EMERGING_TECHNOLOGIES
+}
+
+model Research {
+  id                       String             @id @default(uuid())
+  title                    String
+  paperUrl                 String
+  publicationYear          Int
+  technologyCategory       TechnologyCategory
+
+  problem                  String
+  approach                 String
+  keyFindings              String
+  researcherInsight        String
+  whyItMatters             String
+  whatCommunityShouldLearn String
+
+  unclearParts             String?
+  discussionQuestions      String?
+
+  authorId                 String
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  // Relations
+  author                   User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  ratings                  ResearchRating[]
+  content                  Content[]
+
+  @@index([authorId])
+  @@index([technologyCategory])
+  @@index([publicationYear])
+  @@map("research")
+}
+
+model ResearchRating {
+  id         String   @id @default(uuid())
+  researchId String
+  userId     String
+  score      Int      // 1-5
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  research   Research @relation(fields: [researchId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([researchId, userId])
+  @@index([researchId])
+  @@map("research_ratings")
+}
+
+// ============================================================
+// CONTENT
+// ============================================================
+
+enum ContentStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  APPROVED
+  READY_FOR_VISUAL
+  IN_VISUAL_DESIGN
+  VISUAL_COMPLETED
+  PUBLISHED
+  EXPIRED
+}
+
+enum ContentAngle {
+  EDUCATION
+  TECH_IMPACT
+  PRACTICAL_APPLICATION
+  CAREER
+  INDUSTRY
+  FUTURE
+}
+
+enum TargetAudience {
+  BEGINNER
+  STUDENT
+  DEVELOPER
+  TECH_ENTHUSIAST
+  RESEARCHER
+  PROFESSIONAL
+  GENERAL_PUBLIC
+}
+
+model Content {
+  id             String         @id @default(uuid())
+  researchId     String
+  title          String
+  targetAudience TargetAudience
+  contentAngle   ContentAngle
+  hook           String
+  headline       String
+  caption        String
+  cta            String
+  sources        String[]
+  status         ContentStatus  @default(DRAFT)
+  revisionCount  Int            @default(0) // max 1 revision allowed
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  research       Research       @relation(fields: [researchId], references: [id], onDelete: Restrict)
+  creator        User           @relation("ContentCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  slides         ContentSlide[]
+  reviews        ContentReview[]
+  revisions      ContentRevision[]
+  visualDesign   VisualDesign?
+
+  @@index([researchId])
+  @@index([createdBy])
+  @@index([status])
+  @@map("content")
+}
+
+model ContentSlide {
+  id          String   @id @default(uuid())
+  contentId   String
+  slideNumber Int
+  title       String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  content     Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@unique([contentId, slideNumber])
+  @@index([contentId])
+  @@map("content_slides")
+}
+
+model ContentRevision {
+  id        String   @id @default(uuid())
+  contentId String
+  version   Int      @default(1)
+  changedBy String
+  changes   Json     // JSON snapshot of changes
+  createdAt DateTime @default(now())
+
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [changedBy], references: [id], onDelete: Restrict)
+
+  @@index([contentId])
+  @@map("content_revisions")
+}
+
+model ContentReview {
+  id              String   @id @default(uuid())
+  contentId       String
+  reviewerId      String
+
+  // Scores 1-10
+  accuracyScore    Int
+  relevanceScore   Int
+  clarityScore     Int
+  hookScore        Int
+  valueScore       Int
+  flowScore        Int
+  ctaScore         Int
+  consistencyScore Int
+
+  comment         String
+  reviewRound     Int      @default(1) // 1 or 2
+
+  createdAt       DateTime @default(now())
+
+  content         Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  reviewer        User     @relation("ReviewerUser", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@unique([contentId, reviewerId, reviewRound])
+  @@index([contentId])
+  @@index([reviewerId])
+  @@map("content_reviews")
+}
+
+// ============================================================
+// VISUAL DESIGN
+// ============================================================
+
+enum VisualDesignStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model VisualDesign {
+  id         String             @id @default(uuid())
+  contentId  String             @unique
+  designerId String
+  status     VisualDesignStatus @default(IN_PROGRESS)
+  remark     String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  content    Content            @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  designer   User               @relation(fields: [designerId], references: [id], onDelete: Restrict)
+
+  @@index([designerId])
+  @@map("visual_designs")
+}
+
+// ============================================================
+// XCR LEDGER
+// ============================================================
+
+enum XcrTransactionType {
+  RESEARCH_SUBMITTED
+  RESEARCH_REFERENCED_CONTENT_APPROVED
+  PEER_REVIEW_COMPLETED
+  ADMIN_ADJUSTMENT
+}
+
+model XcrTransaction {
+  id              String             @id @default(uuid())
+  userId          String
+  amount          Int                // XCR amount (positive = earned)
+  transactionType XcrTransactionType
+  referenceType   String?            // e.g., "RESEARCH", "CONTENT", "REVIEW"
+  referenceId     String?            // UUID of the referenced entity
+  createdAt       DateTime           @default(now())
+
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Idempotency: prevent duplicate rewards for same event
+  @@unique([transactionType, referenceId], name: "idempotency_key")
+  @@index([userId])
+  @@map("xcr_transactions")
+}
+
+// ============================================================
+// ACTIVITY LOG
+// ============================================================
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String   // e.g., "RESEARCH_SUBMITTED", "CONTENT_APPROVED"
+  entityType String   // e.g., "RESEARCH", "CONTENT", "REVIEW"
+  entityId   String
+  metadata   Json?    // additional context
+  createdAt  DateTime @default(now())
+
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ============================================================
+// BLOCKCHAIN ATTESTATIONS
+// ============================================================
+
+enum AttestationStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+model BlockchainAttestation {
+  id               String            @id @default(uuid())
+  entityType       String            // e.g., "RESEARCH", "CONTENT", "REVIEW"
+  entityId         String
+  contributorId    String
+  contributionType String            // matches contract constants
+  transactionHash  String?           // populated after confirmation
+  blockchainNetwork String           @default("arbitrumSepolia")
+  contractAddress  String?
+  status           AttestationStatus @default(PENDING)
+  errorMessage     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  contributor      User              @relation("ContributorAttestations", fields: [contributorId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@index([contributorId])
+  @@index([status])
+  @@map("blockchain_attestations")
+}

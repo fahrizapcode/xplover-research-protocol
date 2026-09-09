@@ -1,0 +1,25 @@
+{
+  "name": "xplover",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Xplover — Collaborative Knowledge Platform powered by Web3",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "contracts"
+  ],
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "migrate": "cd backend && npx prisma migrate deploy",
+    "seed": "cd backend && npm run seed",
+    "test:backend": "cd backend && npm test",
+    "test:contracts": "cd contracts && npx hardhat test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

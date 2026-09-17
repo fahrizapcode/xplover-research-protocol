@@ -84,12 +84,8 @@ export async function cancelVisualDesign(contentId: string, designerId: string) 
       where: { id: contentId },
       data: { status: ContentStatus.READY_FOR_VISUAL },
     }),
-    prisma.visualDesign.update({
+    prisma.visualDesign.delete({
       where: { contentId },
-      data: {
-        status: VisualDesignStatus.NOT_STARTED,
-        updatedAt: new Date(),
-      },
     }),
   ]);
 
